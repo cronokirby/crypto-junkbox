@@ -66,6 +66,11 @@ class Point:
     x: int
     y: int
 
+    def to_projective(self):
+        if self.infinity:
+            return Projective(0, 1, 0)
+        return Projective(x, y, 1)
+
 
 @dataclass
 class Projective:
@@ -85,7 +90,7 @@ class Curve:
     Represent a Montgomery Curve By^2 = x^3 + Ax^2 + x, over the field Z_P
     """
 
-    def __init__(self, B, A, P):
+    def __init__(self, B, A, P: Modulus):
         self.B = B
         self.A = A
         self.P = P
@@ -95,3 +100,9 @@ class Curve:
 
     def __str__(self):
         return f"Curve(B={self.B:_X}, A={self.A:_X}, P={self.P})"
+
+    def poly(self, x):
+        x2 = self.P.mul(x, x)
+        x3 = self.P.mul(x, x2)
+        out = self.P.add(x3, x)
+        return self.P.add(out, self.P.mul(self.A, x2))
