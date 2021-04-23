@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 class Modulus:
     """
     Represents a Modulus, enabling modular arithmetic
@@ -51,6 +54,30 @@ class Modulus:
 
     def __repr__(self):
         return self.__str__()
+
+
+@dataclass
+class Point:
+    """
+    Represents a Point on the curve
+    """
+
+    infinity: bool
+    x: int
+    y: int
+
+
+@dataclass
+class Projective:
+    x: int
+    y: int
+    z: int
+
+    def project(self, P: Modulus):
+        if self.z == 0:
+            return Point(True, 0, 0)
+        zinv = P.invert(self.z)
+        return Point(False, self.x * zinv, self.y * zinv)
 
 
 class Curve:
