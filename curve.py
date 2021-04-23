@@ -1,13 +1,10 @@
-from dataclasses import dataclass
-
-
-@dataclass
 class Modulus:
     """
     Represents a Modulus, enabling modular arithmetic
     """
 
-    P: int
+    def __init__(self, P):
+        self.P = P
 
     def reduce(self, x):
         """
@@ -30,13 +27,32 @@ class Modulus:
         """
         return (a * b) % self.P
 
+    def exp(self, x, e):
+        """
+        Calculate x^e % P, assuming x is already reduced
+        """
+        x_squared = x
+        acc = 1
+        while e > 0:
+            if e & 1:
+                acc = self.mul(acc, x_squared)
+            e >>= 1
+            x_squared = self.mul(x_squared, x_squared)
+        return acc
 
-@dataclass
+    def invert(self, x):
+        """
+        Calculate x^(-1) % P, assuming x is already reduced
+        """
+        return self.exp(x, self.P - 2)
+
+
 class Curve:
     """
-    Represent a Montgomery Curve By^2 = x^3 + Ax^2 + x
+    Represent a Montgomery Curve By^2 = x^3 + Ax^2 + x, over the field Z_P
     """
 
-    P: int
-    B: int
-    A: int
+    def __init__(self, B, A, P):
+        self.B = B
+        self.A = A
+        self.P = P
