@@ -46,6 +46,12 @@ class Modulus:
         """
         return self.exp(x, self.P - 2)
 
+    def __str__(self):
+        return f"Modulus({self.P:_X})"
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class Curve:
     """
