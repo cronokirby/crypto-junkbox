@@ -1,150 +1,101 @@
-from dataclasses import dataclass
+P = (1 << 255) - 19
 
 
-class Modulus:
+def exp(x, e, P):
     """
-    Represents a Modulus, enabling modular arithmetic
+    Calculate x^e % P, assuming x is already reduced
     """
-
-    def __init__(self, P):
-        self.P = P
-
-    def reduce(self, x):
-        """
-        Reduce x modulo this modulus
-        """
-        return x % self.P
-
-    def add(self, a, b):
-        """
-        Calculate a + b % P, assuming a and b are already reduced
-        """
-        added = a + b
-        if added >= self.P:
-            added -= self.P
-        return added
-
-    def mul(self, a, b):
-        """
-        Calculate a * b % P assuming a and b are already reduced
-        """
-        return (a * b) % self.P
-
-    def exp(self, x, e):
-        """
-        Calculate x^e % P, assuming x is already reduced
-        """
-        x_squared = x
-        acc = 1
-        while e > 0:
-            if e & 1:
-                acc = self.mul(acc, x_squared)
-            e >>= 1
-            x_squared = self.mul(x_squared, x_squared)
-        return acc
-
-    def invert(self, x):
-        """
-        Calculate x^(-1) % P, assuming x is already reduced
-        """
-        return self.exp(x, self.P - 2)
-    
-    def negate(self, x):
-        """
-        Calculate -x % P
-        """
-        if x == 0:
-            return x
-        return self.P - x
-
-    def sub(self, a, b):
-        return self.add(a, self.negate(b))
-
-    def __str__(self):
-        return f"Modulus({self.P:_X})"
-
-    def __repr__(self):
-        return self.__str__()
+    x_squared = x
+    acc = 1
+    while e > 0:
+        if e & 1:
+            acc = (acc * x_squared) % P
+        e >>= 1
+        x_squared = (x_squared * x_squared) % P
+    return acc
 
 
-@dataclass
-class Point:
-    """
-    Represents a Point on the curve
-    """
-
-    is_infinity: bool
-    x: int
-    y: int
-
-    @staticmethod
-    def infinity():
-        return Point(True, 0, 0)
-
-    def to_projective(self):
-        if self.infinity:
-            return Projective(0, 1, 0)
-        return Projective(self.x, self.y, 1)
-    
-    def __repr__(self):
-        return self.__str__()
-    
-    def __str__(self):
-        if self.is_infinity:
-            return "Point(∞)"
-        return f"Point(x={self.x:_X} y={self.y:_X})"
+def from_le_bytes(le_bytes):
+    acc = 0
+    for b in le_bytes[::-1]:
+        acc = (acc << 8) + b
+    return acc
 
 
-@dataclass
-class Projective:
-    x: int
-    y: int
-    z: int
-
-    def project(self, P: Modulus):
-        if self.z == 0:
-            return Point.infinity()
-        zinv = P.invert(self.z)
-        return Point(False, self.x * zinv, self.y * zinv)
+def to_le_bytes(num):
+    acc = []
+    while num > 0:
+        acc.append(num & 0xFF)
+        num >>= 8
+    return acc
 
 
-class Curve:
-    """
-    Represent a Montgomery Curve By^2 = x^3 + Ax^2 + x, over the field Z_P
-    """
+def x25519(k_bytes, u_bytes):
+    k_bytes_cp = k_bytes[:]
+    k_bytes_cp[0] &= 248
+    k_bytes_cp[31] &= 127
+    k_bytes_cp[31] |= 64
+    k = from_le_bytes(k_bytes_cp)
+    u = (from_le_bytes(u_bytes) & ((1 << 255) - 1)) % P
+    x1 = u
+    x2 = 1
+    z2 = 0
+    x3 = u
+    z3 = 1
+    swap = 0
+    for b in range(255, -1, -1):
+        bit = (k >> b) & 1
+        swap ^= bit
+        if swap:
+            (x2, x3) = (x3, x2)
+            (z2, z3) = (z3, z2)
+        swap = bit
 
-    def __init__(self, B, A, P: Modulus):
-        self.B = B
-        self.A = A
-        self.P = P
+        A = x2 + z2
+        AA = A * A
+        B = x2 - z2
+        BB = B * B
+        E = AA - BB
+        C = x3 + z3
+        D = x3 - z3
+        DA = D * A
+        CB = C * B
+        x3 = (DA + CB) ** 2
+        x3 = x3 % P
+        z3 = x1 * ((DA - CB) ** 2)
+        z3 = z3 % P
+        x2 = AA * BB
+        x2 = x2 % P
+        z2 = E * (AA + 121665 * E)
+        z2 = z2 % P
+    if swap:
+        (x2, x3) = (x3, x2)
+        (z2, z3) = (z3, z2)
+    return to_le_bytes((x2 * exp(z2, P - 2, P)) % P)
 
-    def __repr__(self):
-        return self.__str__()
 
-    def __str__(self):
-        return f"Curve(B={self.B:_X}, A={self.A:_X}, P={self.P})"
+def bytes_from_string(s):
+    acc = []
+    for i in range(0, len(s), 2):
+        acc.append(int(s[i : i + 2], 16))
+    return acc
 
-    def poly(self, x):
-        x2 = self.P.mul(x, x)
-        x3 = self.P.mul(x, x2)
-        out = self.P.add(x3, x)
-        return self.P.add(out, self.P.mul(self.A, x2))
 
-    def add(self, p: Point, q: Point):
-        if p.is_infinity:
-            return q
-        if q.is_infinity:
-            return p
-        l = 0
-        if p.x == q.x:
-            if p.y != q.y:
-                return Point.infinity()
-            l = self.P.reduce(3 * p.x * p.x + 2 * self.A * p.x + 1)
-            l = self.P.mul(l, self.P.invert(self.P.reduce(2 * self.B * p.y)))
-        l = self.P.sub(q.y, p.y)
-        l = self.P.mul(l, self.P.invert(self.P.sub(q.x, q.y)))
-        l2 = self.P.mul(l, l)
-        out_x = self.P.reduce(self.B * l2 - self.A - p.x - q.x)
-        out_y = self.P.reduce(l * (p.x - out_x) - p.y)
-        return Point(False, out_x, out_y)
-
+if __name__ == "__main__":
+    tests = [
+        (
+            "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4",
+            "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c",
+        ),
+        (
+            "4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d",
+            "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a413",
+        ),
+    ]
+    for k_bytes, u_bytes in tests:
+        print(
+            "".join(
+                f"{b:02x}"
+                for b in x25519(bytes_from_string(k_bytes), bytes_from_string(u_bytes))
+            )
+        )
