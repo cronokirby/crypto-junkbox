@@ -35,6 +35,7 @@ def x25519(k_bytes, u_bytes):
     k_bytes_cp[0] &= 248
     k_bytes_cp[31] &= 127
     k_bytes_cp[31] |= 64
+    print("scalar", [f'{b:02X}' for b in k_bytes_cp])
     k = from_le_bytes(k_bytes_cp)
     u = (from_le_bytes(u_bytes) & ((1 << 255) - 1)) % P
     x1 = u
@@ -43,9 +44,18 @@ def x25519(k_bytes, u_bytes):
     x3 = u
     z3 = 1
     swap = 0
+    print(f'x1 {x1:_X}')
+    print(f'x2 {x2:_X}')
+    print(f'x3 {x2:_X}')
     for b in range(255, -1, -1):
+
         bit = (k >> b) & 1
         swap ^= bit
+        print(f'b {b} bit {bit} swap {swap}')
+        print(f'  x2 {x2:_X}')
+        print(f'  z2 {z2:_X}')
+        print(f'  x3 {x3:_X}')
+        print(f'  z3 {z3:_X}')
         if swap:
             (x2, x3) = (x3, x2)
             (z2, z3) = (z3, z2)
@@ -71,7 +81,13 @@ def x25519(k_bytes, u_bytes):
     if swap:
         (x2, x3) = (x3, x2)
         (z2, z3) = (z3, z2)
-    return to_le_bytes((x2 * exp(z2, P - 2, P)) % P)
+    print('final')
+    print(f'  x2 {x2:_X}')
+    print(f'  z2 {z2:_X}')
+    print(f'  z2^-1 {exp(z2, P - 2, P) % P:_X}')
+    out = (x2 * exp(z2, P - 2, P)) % P
+    print(f'out {out:_X}')
+    return to_le_bytes(out)
 
 
 def bytes_from_string(s):
@@ -79,6 +95,10 @@ def bytes_from_string(s):
     for i in range(0, len(s), 2):
         acc.append(int(s[i : i + 2], 16))
     return acc
+
+
+def print_bytes(s):
+    return '[' + ', '.join(f'0x{b:02X}' for b in bytes_from_string(s)) + ']'
 
 
 if __name__ == "__main__":
@@ -93,6 +113,8 @@ if __name__ == "__main__":
         ),
     ]
     for k_bytes, u_bytes in tests:
+        print("k_bytes", k_bytes);
+        print("u_bytes", u_bytes);
         print(
             "".join(
                 f"{b:02x}"
