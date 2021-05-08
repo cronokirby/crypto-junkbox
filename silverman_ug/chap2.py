@@ -39,7 +39,7 @@ def point_add(p1, p2, P):
     if p1[1] == (P - p2[1]) % P:
         return INF
     if p1 == p2:
-        l = (3 * p1[0] ** 2) * mod_inv(p1[1], P) % P
+        l = (3 * p1[0] * p1[0]) * mod_inv(2 * p1[1], P) % P
     else:
         l = (p2[1] - p1[1]) * mod_inv(p2[0] - p1[0], P) % P
     x = (l * l - p1[0] - p2[0]) % P
@@ -55,6 +55,8 @@ def generated_set(q, P):
     
 
 def cross_generated(list_a, list_b, P):
-    for p1 in list_a:
-        for p2 in list_b:
+    real_list_a = list(list_a)
+    real_list_b = list(list_b)
+    for p1 in real_list_a:
+        for p2 in real_list_b:
             yield point_add(p1, p2, P)
